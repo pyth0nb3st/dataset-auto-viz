@@ -1,0 +1,7 @@
+static/
+output/
+data/
+uploads/
+visualization_results/
+workspace/
+play*.py

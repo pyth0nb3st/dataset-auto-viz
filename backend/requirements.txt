@@ -1,0 +1,12 @@
+GeneralAgent==0.3.24
+fastapi
+uvicorn
+pydantic
+python-dotenv
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+networkx
+python-multipart
