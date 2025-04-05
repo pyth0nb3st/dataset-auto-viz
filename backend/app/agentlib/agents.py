@@ -18,7 +18,7 @@ def create_visual_plan_agent(
     token_limit: Optional[int] = 64000,
 ):
     plot_agent = Agent(
-        role=prompts.PLOT_AGENT_PROMPT,
+        role=prompts.VISUAL_PLAN_AGENT_PROMPT,
         model=model,
         output_callback=output_callback,
         workspace=workspace,

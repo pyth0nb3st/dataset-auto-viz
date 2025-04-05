@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 
 
-def install_packages(packages: list[str]):
+def install_packages(packages: list[str]) -> str:
     """
     Install packages using pip
     """
@@ -15,7 +15,7 @@ def install_packages(packages: list[str]):
         return f"Installed {packages} successfully"
 
 
-def dataset_glance(dataset: pd.DataFrame):
+def dataset_glance(dataset: pd.DataFrame) -> dict:
     """
     Get a glance of a dataset with data type and sample data
     """
@@ -48,7 +48,7 @@ def dataset_glance(dataset: pd.DataFrame):
     return info
 
 
-def column_analysis(df: pd.DataFrame, columns: list[str]):
+def column_analysis(df: pd.DataFrame, columns: list[str]) -> dict:
     """
     Analyze specified columns in a dataframe
 

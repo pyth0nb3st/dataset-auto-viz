@@ -3,11 +3,10 @@ from importlib import reload
 from pathlib import Path
 from pprint import pprint
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from GeneralAgent import Agent
 
 import app.agentlib.prompts as prompts
 import app.agentlib.skills as skills
@@ -63,6 +62,9 @@ def token_callback(token):
 
 @app.post("/analyze-image")
 async def analyze_image(file: UploadFile = File(...)):
+    image_to_text_agent = create_image_to_text_agent(
+        gemini_2_0_flash, "en", output_callback=token_callback
+    )
     try:
         # Save uploaded file temporarily
         file_path = f"temp_{file.filename}"
@@ -89,13 +91,13 @@ def analyze_dataset(
 ):
     workspace_path = settings.WORKSPACE_DIR / workspace
     plan_agent = create_visual_plan_agent(
-        quasar_alpha,
+        deepseek_v3_0324,
         workspace=workspace_path,
         output_callback=token_callback,
         functions=[dataset_glance],
     )
     plot_agent = create_plot_agent(
-        quasar_alpha, workspace=workspace_path, output_callback=token_callback
+        quasar_alpha, workspace=workspace_path, output_callback=token_callback, functions=[install_packages]
     )
     image_to_text_agent = create_image_to_text_agent(
         gemini_2_0_flash, language, output_callback=token_callback
@@ -114,7 +116,7 @@ def analyze_dataset(
 
         # Analyze dataset
         result = plan_agent.user_input(
-            f"{file_path} 看一下这个数据集，只有最后一行的变量会被返回，不要做异常处理"
+            f"{file_path} 用 dataset_glance 看一下这个数据集，只有最后一行的变量会被返回，不要做异常处理\n" + prompts.create_workspace_prompt(workspace)
         )
         tasks = plan_agent.run(
             "生成一个数据可视化的计划，说明一下每一步使用什么图片类型，横纵坐标数据，图片标题，图片大小，每一步都要生成一张图片，需要有plot和带有subplots的plot各几张",
@@ -144,7 +146,12 @@ def analyze_dataset(
 
         descriptions = []
         for path in visualization_paths:
-            relative_path = Path(path).relative_to(settings.STATIC_DIR)
+            try:
+                relative_path = Path(path).absolute().relative_to(settings.STATIC_DIR.absolute())
+            except Exception as e:
+                print(e)
+                continue
+
             url = f"{request.url.scheme}://{request.url.netloc}/static/{relative_path}"
             description = image_to_text_agent.run(
                 [{"image": path, "text": f"生成给定图片的描述, using {language}"}]
@@ -154,9 +161,10 @@ def analyze_dataset(
         data_analysis_report = data_analysis_report_agent.run(
             f"based on the url and description mapping: \n{descriptions}.\nGenerate a data analysis report, and save it as a html file"
             + prompts.create_workspace_prompt(workspace),
-            "only return the html file path as string, only the last line of variable will be return, remember use #run code to run the code",
+            "html file path as string",
             display=True,
         )
+
         try:
             Path(data_analysis_report).exists()
             data_analysis_report_url = f"{request.url.scheme}://{request.url.netloc}/static/{Path(data_analysis_report).relative_to(settings.STATIC_DIR)}"
