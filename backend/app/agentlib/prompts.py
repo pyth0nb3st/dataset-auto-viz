@@ -5,7 +5,7 @@ def create_workspace_prompt(workspace: str):
     workspace_dir = settings.WORKSPACE_DIR / workspace
     upload_dir = settings.UPLOAD_DIR / workspace
     static_dir = settings.STATIC_DIR / workspace
-    return f'''## Workspace description
+    return f"""## Workspace description
 There are some important folder you should keep in mind:
 - workspace folder: {workspace_dir}
 - upload folder(where user upload files): {upload_dir}
@@ -23,7 +23,7 @@ font_files = fm.findSystemFonts(fontpaths=[font_path])
 for font_file in font_files:
    fm.fontManager.addfont(font_file)
    plt.rcParams['font.family'] = fm.FontProperties(fname=font_file).get_name()
-'''
+"""
 
 
 VISUAL_PLAN_AGENT_PROMPT = """作为专业数据可视化任务分解系统，你的职责是将用户的数据可视化需求拆解为一系列精确、连贯、可执行的步骤。这些步骤将指导AI生成高质量Python代码，创建专业、有洞察力的数据可视化。
@@ -101,7 +101,7 @@ VISUAL_PLAN_AGENT_PROMPT = """作为专业数据可视化任务分解系统，�
 """
 
 
-PLOT_AGENT_PROMPT = '''
+PLOT_AGENT_PROMPT = """
 # 数据可视化代码助手系统提示
 
 你是一位专业的数据可视化编程助手。你的任务是根据用户提供的需求和数据，编写高质量的Python代码来创建数据可视化图表。你需要理解用户的分析目标，选择合适的可视化库和图表类型，并生成清晰、信息丰富、美观的可视化结果。
@@ -193,14 +193,14 @@ PLOT_AGENT_PROMPT = '''
 ## 返回格式:
 你必须返回一个Python字符串，代表保存的图片文件路径，例如："./visualization_results/analysis_plot.png"。在返回这个路径之前，确保你的代码已将图表保存到相应位置。
 
-image_path  # 返回图片路径字符串'''
+image_path  # 返回图片路径字符串"""
 
 
 def create_image_to_text_agent_prompt(language: str):
-    return f'''你是一名图片分析师，擅长用 {language} 对图片进行深度解读。
+    return f"""你是一名图片分析师，擅长用 {language} 对图片进行深度解读。
  请基于图片中的可见元素、氛围和上下文信息，生成一段简洁却充实、具有洞察力的文字描述。
- 你的描述应精准概括图片类型与主要元素，点明其核心表达与潜在意义，让读者对图片的重点和内涵有进一步的理解。'''
+ 你的描述应精准概括图片类型与主要元素，点明其核心表达与潜在意义，让读者对图片的重点和内涵有进一步的理解。"""
 
- 
+
 def create_data_analysis_report_agent_prompt(language: str):
-    return f'''基于以下数据，使用{language}生成一份数据分析报告。生成网页报告的时候可以使用tailwind css以及其它必要的cdn，优化一下页面的样式和布局。'''
+    return f"""基于以下数据，使用{language}生成一份数据分析报告。生成网页报告的时候可以使用tailwind css以及其它必要的cdn，优化一下页面的样式和布局。"""

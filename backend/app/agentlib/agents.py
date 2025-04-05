@@ -1,16 +1,20 @@
-from typing import Callable, Optional, List
+from typing import Callable, List, Optional
 
 from GeneralAgent import Agent
 
 from app.agentlib import prompts
-from app.agentlib.skills import install_packages, dataset_glance, column_analysis
+from app.agentlib.skills import column_analysis, dataset_glance, install_packages
 
 
 def create_visual_plan_agent(
     model: str,
     output_callback: Callable = None,
     workspace: Optional[str] = None,
-    functions: Optional[List[Callable]] = [install_packages, dataset_glance, column_analysis],
+    functions: Optional[List[Callable]] = [
+        install_packages,
+        dataset_glance,
+        column_analysis,
+    ],
     token_limit: Optional[int] = 64000,
 ):
     plot_agent = Agent(

@@ -1,5 +1,5 @@
-import sys
 import subprocess
+import sys
 
 import pandas as pd
 
@@ -8,7 +8,7 @@ def install_packages(packages: list[str]):
     """
     Install packages using pip
     """
-    ret = subprocess.run([sys.executable, '-m', 'pip', 'install', *packages])
+    ret = subprocess.run([sys.executable, "-m", "pip", "install", *packages])
     if ret.returncode != 0:
         return f"Failed to install {packages}"
     else:
@@ -26,20 +26,24 @@ def dataset_glance(dataset: pd.DataFrame):
             "top_5_unique_values": col_data.value_counts().head(5).to_dict(),
         }
         if pd.api.types.is_numeric_dtype(col_data):
-            analysis[col].update({
-                "min": col_data.min(),
-                "max": col_data.max(),
-                "25%": col_data.quantile(0.25),
-                "50%": col_data.quantile(0.50),
-                "75%": col_data.quantile(0.75),
-            })
-        analysis[col].update({
-            "unique_count": col_data.nunique(),
-        })
+            analysis[col].update(
+                {
+                    "min": col_data.min(),
+                    "max": col_data.max(),
+                    "25%": col_data.quantile(0.25),
+                    "50%": col_data.quantile(0.50),
+                    "75%": col_data.quantile(0.75),
+                }
+            )
+        analysis[col].update(
+            {
+                "unique_count": col_data.nunique(),
+            }
+        )
     info = {
         "dtypes": dataset.dtypes,
-        "sample": dataset.head(3).to_dict(orient='records'),
-        "analysis": analysis
+        "sample": dataset.head(3).to_dict(orient="records"),
+        "analysis": analysis,
     }
     return info
 
@@ -47,11 +51,11 @@ def dataset_glance(dataset: pd.DataFrame):
 def column_analysis(df: pd.DataFrame, columns: list[str]):
     """
     Analyze specified columns in a dataframe
-    
+
     Args:
         df: pandas DataFrame to analyze
         columns: list of column names to analyze
-        
+
     Returns:
         dict containing analysis results for each column
     """
@@ -60,7 +64,7 @@ def column_analysis(df: pd.DataFrame, columns: list[str]):
         if col not in df.columns:
             results[col] = f"Column {col} not found in dataframe"
             continue
-            
+
         col_data = df[col]
         analysis = {
             "max": col_data.max() if pd.api.types.is_numeric_dtype(col_data) else None,
@@ -68,9 +72,9 @@ def column_analysis(df: pd.DataFrame, columns: list[str]):
             "unique_count": col_data.nunique(),
             "top_5_values": col_data.value_counts().head(5).to_dict(),
             "dtype": str(col_data.dtype),
-            'missing_count': col_data.isnull().sum(),
-            'missing_percentage': col_data.isnull().mean()
-    }
+            "missing_count": col_data.isnull().sum(),
+            "missing_percentage": col_data.isnull().mean(),
+        }
     results[col] = analysis
 
     return results
