@@ -1,11 +1,13 @@
 import os
 from importlib import reload
 from pathlib import Path
+import tempfile
 
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import json
 
 import app.agentlib.prompts as prompts
 import app.agentlib.skills as skills
@@ -65,10 +67,8 @@ def token_callback(token):
             f.write("\n\n")
 
 
-@app.post("/analyze-dataset")
-def analyze_dataset(
-    workspace: str, language: str, request: Request, file: UploadFile = File(...)
-):
+
+def stream_analysis_results(workspace: str, language: str, request: Request, file_path: str):
     workspace_path = settings.WORKSPACE_DIR / workspace
     general_agent = create_general_agent(
         plan_model,
@@ -91,27 +91,18 @@ def analyze_dataset(
     )
 
     try:
-        # Save uploaded file temporarily
-        file_path = settings.UPLOAD_DIR / workspace / file.filename
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, "wb") as buffer:
-            content = file.file.read()
-            buffer.write(content)
-
         # Analyze dataset
         result = general_agent.user_input(
             f"{file_path} 用 dataset_glance 看一下这个数据集，只有最后一行的变量会被返回，不要做异常处理\n" + prompts.create_workspace_prompt(workspace)
         )
-
-        # Use sse return the result
+        yield json.dumps({"type": "analysis", "data": str(result)}) + "\n"
 
         tasks = plan_agent.run(
             "生成一个数据可视化的计划，说明一下每一步使用什么图片类型，横纵坐标数据，图片标题，图片大小，每一步都要生成一张图片，需要有plot和带有subplots的plot各几张",
             "a variable represents a list[str] for tasks",
             display=True,
         )
-
-        # Use sse return the tasks
+        yield json.dumps({"type": "tasks", "data": tasks}) + "\n"
 
         # Generate visualizations
         image_path_url_tuples = []
@@ -127,11 +118,9 @@ def analyze_dataset(
                     relative_path = Path(img_path).absolute().relative_to(settings.STATIC_DIR.absolute())
                     url = f"{request.url.scheme}://{request.url.netloc}/static/{relative_path}"
                     image_path_url_tuples.append((img_path, url))
+                    yield json.dumps({"type": "image", "data": {"url": url}}) + "\n"
             except Exception as e:
                 print(e)
-
-        # Clean up
-        os.remove(file_path)
 
         descriptions = []
         for path, url in image_path_url_tuples:
@@ -139,6 +128,7 @@ def analyze_dataset(
                 [{"image": path, "text": f"生成给定图片的描述, using {language}"}]
             )
             descriptions.append({"url": url, "description": description})
+            yield json.dumps({"type": "description", "data": {"url": url, "description": description}}) + "\n"
 
         data_analysis_report = data_analysis_report_agent.run(
             f"based on the url and description mapping: \n{descriptions}.\nGenerate a data analysis report, and save it as a html file" + prompts.create_workspace_prompt(workspace),
@@ -152,10 +142,12 @@ def analyze_dataset(
         except Exception as e:
             data_analysis_report_url = None
             print(e)
-        return JSONResponse(
-            content={
+        
+        yield json.dumps({
+            "type": "final",
+            "data": {
                 "analysis": str(result),
-                "tasks": [task for task in tasks],
+                "tasks": tasks,
                 "image_urls": [url for _, url in image_path_url_tuples],
                 "descriptions": [str(description) for description in descriptions],
                 "data_analysis_report": (
@@ -164,9 +156,34 @@ def analyze_dataset(
                     else str(data_analysis_report)
                 ),
             }
-        )
+        }) + "\n"
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        yield json.dumps({"type": "error", "data": str(e)}) + "\n"
+    finally:
+        # Clean up the uploaded file
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Error cleaning up file: {e}")
+
+@app.post("/analyze-dataset")
+def analyze_dataset(
+    workspace: str, 
+    language: str, 
+    request: Request, 
+    file: UploadFile = File(...)
+):
+    # Create a temporary file to store the uploaded content
+    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
+        content = file.file.read()
+        temp_file.write(content)
+        temp_file_path = temp_file.name
+
+    # Start streaming the analysis results
+    return StreamingResponse(
+        stream_analysis_results(workspace, language, request, temp_file_path),
+        media_type="text/event-stream"
+    )
 
 
 if __name__ == "__main__":
