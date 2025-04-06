@@ -15,7 +15,7 @@ def install_packages(packages: list[str]) -> str:
         return f"Installed {packages} successfully"
 
 
-def dataset_glance(dataset: pd.DataFrame) -> dict:
+def dataset_glance(dataset: pd.DataFrame) -> str:
     """
     Get a glance of a dataset with data type and sample data
     """
@@ -45,10 +45,10 @@ def dataset_glance(dataset: pd.DataFrame) -> dict:
         "sample": dataset.head(3).to_dict(orient="records"),
         "analysis": analysis,
     }
-    return info
+    return str(info)
 
 
-def column_analysis(df: pd.DataFrame, columns: list[str]) -> dict:
+def column_analysis(df: pd.DataFrame, columns: list[str]) -> str:
     """
     Analyze specified columns in a dataframe
 
@@ -77,4 +77,4 @@ def column_analysis(df: pd.DataFrame, columns: list[str]) -> dict:
         }
     results[col] = analysis
 
-    return results
+    return str(results)

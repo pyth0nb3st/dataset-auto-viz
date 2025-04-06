@@ -6,6 +6,24 @@ from app.agentlib import prompts
 from app.agentlib.skills import column_analysis, dataset_glance, install_packages
 
 
+def create_general_agent(
+    model: str,
+    role: str = "",
+    workspace: Optional[str] = None,
+    functions: Optional[List[Callable]] = [],
+    token_limit: Optional[int] = 64000,
+    output_callback: Optional[Callable] = None,
+):
+    return Agent(
+        model=model,
+        role=role,
+        functions=functions,
+        token_limit=token_limit, 
+        workspace=workspace,
+        output_callback=output_callback
+    )
+
+
 def create_visual_plan_agent(
     model: str,
     output_callback: Callable = None,

@@ -1,7 +1,6 @@
 import os
 from importlib import reload
 from pathlib import Path
-from pprint import pprint
 
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import app.agentlib.prompts as prompts
 import app.agentlib.skills as skills
 from app.agentlib.agents import (
+    create_general_agent,
     create_data_analysis_report_agent,
     create_image_to_text_agent,
     create_plot_agent,
@@ -49,6 +49,11 @@ deepseek_v3 = "ms/deepseek-v3"
 deepseek_v3_0324 = "deepseek/deepseek-chat-v3-0324:free"
 quasar_alpha = "openrouter/quasar-alpha"
 
+plan_model = os.getenv("PLAN_MODEL", deepseek_v3)
+plot_model = os.getenv("PLOT_MODEL", quasar_alpha)
+image_to_text_model = os.getenv("IMAGE_TO_TEXT_MODEL", gemini_2_0_flash_lite)
+data_analysis_report_model = os.getenv("DATA_ANALYSIS_REPORT_MODEL", quasar_alpha)
+
 
 def token_callback(token):
     with open("output.log", "a") as f:
@@ -60,50 +65,29 @@ def token_callback(token):
             f.write("\n\n")
 
 
-@app.post("/analyze-image")
-async def analyze_image(file: UploadFile = File(...)):
-    image_to_text_agent = create_image_to_text_agent(
-        gemini_2_0_flash, "en", output_callback=token_callback
-    )
-    try:
-        # Save uploaded file temporarily
-        file_path = f"temp_{file.filename}"
-        with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-
-        # Analyze image
-        result = image_to_text_agent.user_input(
-            [{"image": file_path, "text": "生成给定图片的描述"}]
-        )
-
-        # Clean up
-        os.remove(file_path)
-
-        return JSONResponse(content={"description": result})
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
 @app.post("/analyze-dataset")
 def analyze_dataset(
     workspace: str, language: str, request: Request, file: UploadFile = File(...)
 ):
     workspace_path = settings.WORKSPACE_DIR / workspace
+    general_agent = create_general_agent(
+        plan_model,
+        functions=[dataset_glance],
+    )
     plan_agent = create_visual_plan_agent(
-        deepseek_v3_0324,
+        plan_model,
         workspace=workspace_path,
         output_callback=token_callback,
         functions=[dataset_glance],
     )
     plot_agent = create_plot_agent(
-        quasar_alpha, workspace=workspace_path, output_callback=token_callback, functions=[install_packages]
+        plot_model, workspace=workspace_path, output_callback=token_callback, functions=[install_packages]
     )
     image_to_text_agent = create_image_to_text_agent(
-        gemini_2_0_flash, language, output_callback=token_callback
+        image_to_text_model, language, output_callback=token_callback
     )
     data_analysis_report_agent = create_data_analysis_report_agent(
-        quasar_alpha, language, workspace=workspace_path, output_callback=token_callback
+        data_analysis_report_model, language, workspace=workspace_path, output_callback=token_callback
     )
 
     try:
@@ -115,19 +99,22 @@ def analyze_dataset(
             buffer.write(content)
 
         # Analyze dataset
-        result = plan_agent.user_input(
+        result = general_agent.user_input(
             f"{file_path} 用 dataset_glance 看一下这个数据集，只有最后一行的变量会被返回，不要做异常处理\n" + prompts.create_workspace_prompt(workspace)
         )
+
+        # Use sse return the result
+
         tasks = plan_agent.run(
             "生成一个数据可视化的计划，说明一下每一步使用什么图片类型，横纵坐标数据，图片标题，图片大小，每一步都要生成一张图片，需要有plot和带有subplots的plot各几张",
             "a variable represents a list[str] for tasks",
             display=True,
         )
 
-        pprint(tasks)
+        # Use sse return the tasks
 
         # Generate visualizations
-        visualization_paths = []
+        image_path_url_tuples = []
         for task in tasks:
             img_path = plot_agent.run(
                 f"{task} \n\n dataset path: {file_path} \n\n"
@@ -136,8 +123,10 @@ def analyze_dataset(
                 display=True,
             )
             try:
-                Path(img_path).exists()
-                visualization_paths.append(img_path)
+                if Path(img_path).exists():
+                    relative_path = Path(img_path).absolute().relative_to(settings.STATIC_DIR.absolute())
+                    url = f"{request.url.scheme}://{request.url.netloc}/static/{relative_path}"
+                    image_path_url_tuples.append((img_path, url))
             except Exception as e:
                 print(e)
 
@@ -145,23 +134,15 @@ def analyze_dataset(
         os.remove(file_path)
 
         descriptions = []
-        for path in visualization_paths:
-            try:
-                relative_path = Path(path).absolute().relative_to(settings.STATIC_DIR.absolute())
-            except Exception as e:
-                print(e)
-                continue
-
-            url = f"{request.url.scheme}://{request.url.netloc}/static/{relative_path}"
+        for path, url in image_path_url_tuples:
             description = image_to_text_agent.run(
                 [{"image": path, "text": f"生成给定图片的描述, using {language}"}]
             )
             descriptions.append({"url": url, "description": description})
 
         data_analysis_report = data_analysis_report_agent.run(
-            f"based on the url and description mapping: \n{descriptions}.\nGenerate a data analysis report, and save it as a html file"
-            + prompts.create_workspace_prompt(workspace),
-            "html file path as string",
+            f"based on the url and description mapping: \n{descriptions}.\nGenerate a data analysis report, and save it as a html file" + prompts.create_workspace_prompt(workspace),
+            "html file path as string, remember put the string in last line",
             display=True,
         )
 
@@ -175,7 +156,7 @@ def analyze_dataset(
             content={
                 "analysis": str(result),
                 "tasks": [task for task in tasks],
-                "visualizations": [str(path) for path in visualization_paths],
+                "image_urls": [url for _, url in image_path_url_tuples],
                 "descriptions": [str(description) for description in descriptions],
                 "data_analysis_report": (
                     data_analysis_report_url
