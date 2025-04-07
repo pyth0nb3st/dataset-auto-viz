@@ -6,7 +6,8 @@ import VisualizationSteps from './components/VisualizationSteps';
 import FinalReport from './components/FinalReport';
 import ReportModal from './components/ReportModal';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-auto-viz.100s.site';
+const API_URL = 'https://api-auto-viz.100s.site';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
